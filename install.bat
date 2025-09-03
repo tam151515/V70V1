@@ -13,7 +13,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo ❌ ERRO: Python não encontrado!
     echo.
-    echo Por favor, instale Python 3.11+ de https://python.org    
+    echo Por favor, instale Python 3.11+ de https://python.org      
     echo Certifique-se de marcar "Add Python to PATH" durante a instalação.
     echo.
     pause
@@ -59,17 +59,22 @@ echo.
 pip install -r requirements.txt
 pip install flask scrapy playwright
 pip install -r requirements_document_analysis.txt
-playwright install
-pip install selenium
-pip install playwright beautifulsoup4 requests python-dotenv
-playwright install chromium # Ou o navegador que você configurou (firefox, webkit)
 
+REM === CORREÇÃO PLAYWRIGHT ===
+echo 🔄 Instalando Playwright e navegadores...
+pip install playwright
+playwright install-deps
+playwright install chromium firefox webkit
 if errorlevel 1 (
-    echo ❌ ERRO: Falha ao instalar dependências!
-    echo Verifique sua conexão com a internet e tente novamente.
+    echo ❌ ERRO: Falha ao instalar Playwright ou navegadores!
+    echo Verifique se o Python esta funcionando corretamente.
     pause
     exit /b 1
 )
+REM === FIM CORREÇÃO PLAYWRIGHT ===
+
+pip install selenium
+pip install beautifulsoup4 requests python-dotenv
 
 REM === MODIFICAÇÃO CRÍTICA: Instala o modelo spaCy pt_core_news_sm ===
 echo 🔄 Instalando modelo spaCy pt_core_news_sm...
