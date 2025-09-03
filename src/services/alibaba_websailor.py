@@ -64,40 +64,11 @@ class AlibabaWebSailorAgent:
 
         # Domínios bloqueados (irrelevantes)
         self.blocked_domains = {
-            "instagram.com", "facebook.com", "twitter.com", "linkedin.com",
-            "youtube.com", "tiktok.com", "pinterest.com", "reddit.com",
-            "accounts.google.com", "login.microsoft.com", "amazon.com.br",
-            "mercadolivre.com.br", "olx.com.br", "booking.com", "airbnb.com"
+            "airbnb.com"
         }
 
         self.session = requests.Session()
         self.session.headers.update(self.headers)
-        # Configuração SSL mais robusta
-        self.session.verify = True  # Mantém verificação SSL por padrão
-        
-        # Configuração de timeout e retry
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry
-        
-        try:
-            # Tenta usar o parâmetro novo (urllib3 >= 1.26.0)
-            retry_strategy = Retry(
-                total=3,
-                status_forcelist=[429, 500, 502, 503, 504],
-                allowed_methods=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1
-            )
-        except TypeError:
-            # Fallback para versões antigas do urllib3
-            retry_strategy = Retry(
-                total=3,
-                status_forcelist=[429, 500, 502, 503, 504],
-                method_whitelist=["HEAD", "GET", "OPTIONS"],
-                backoff_factor=1
-            )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
 
         # Estatísticas de navegação
         self.navigation_stats = {
@@ -113,8 +84,8 @@ class AlibabaWebSailorAgent:
         logger.info("🌐 Alibaba WebSailor Agent inicializado - Navegação inteligente ativada")
 
     def navigate_and_research_deep(
-        self,
-        query: str,
+        self, 
+        query: str, 
         context: Dict[str, Any],
         max_pages: int = 25,
         depth_levels: int = 3,
@@ -488,10 +459,10 @@ class AlibabaWebSailorAgent:
             return []
 
     def _extract_intelligent_content(
-        self,
-        url: str,
-        title: str,
-        snippet: str,
+        self, 
+        url: str, 
+        title: str, 
+        snippet: str, 
         context: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """Extração inteligente de conteúdo com validação"""
@@ -573,37 +544,46 @@ class AlibabaWebSailorAgent:
 
         return None
 
-    def _extract_with_jina(self, url: str) -> Optional[str]:
-        """Extrai usando Jina Reader API"""
+    def _extract_with_jina(self, url: str, max_retries: int = 3) -> Optional[str]:
+        """Extrai conteúdo usando Jina Reader com retentativas"""
+        for attempt in range(max_retries):
+            try:
+                jina_url = f"https://r.jina.ai/{url}"
+                response = requests.get(jina_url, timeout=60)  # Aumentado para 60s
 
-        if not self.jina_api_key:
-            return None
+                if response.status_code == 200:
+                    content = response.text
 
-        try:
-            headers = {
-                **self.headers,
-                "Authorization": f"Bearer {self.jina_api_key}"
-            }
+                    if len(content) > 15000:
+                        content = content[:15000] + "... [conteúdo truncado para otimização]"
 
-            jina_url = f"{self.jina_reader_url}{url}"
+                    return content
+                else:
+                    logger.warning(f"⚠️ Jina Reader retornou status {response.status_code} para {url}")
+                    # Lógica de retorno para status não 200 específica se necessário
 
-            response = requests.get(jina_url, headers=headers, timeout=60)
+            except requests.exceptions.ReadTimeout:
+                logger.warning(f"⚠️ Jina Reader timeout para {url} - usando fallback")
+                return self._fallback_extraction(url)
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"⚠️ Jina Reader connection error para {url} - usando fallback")
+                return self._fallback_extraction(url)
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"⚠️ Jina Reader tentativa {attempt + 1} falhou: {e}")
+                if attempt == max_retries - 1:
+                    self.logger.error(f"❌ Jina Reader falhou após {max_retries} tentativas")
+                    return None
+                else:
+                    time.sleep(2 ** attempt)  # Backoff exponencial
+                    continue
+        return None
 
-            if response.status_code == 200:
-                content = response.text
+    def _fallback_extraction(self, url: str) -> Optional[str]:
+        """Fallback para extração de conteúdo quando Jina falha"""
+        logger.info(f"🔄 Usando fallback para extrair conteúdo de {url}")
+        # Tenta extrair com BeautifulSoup como fallback
+        return self._extract_with_beautifulsoup(url)
 
-                if len(content) > 15000:
-                    content = content[:15000] + "... [conteúdo truncado para otimização]"
-
-                return content
-            else:
-                # Logar erro específico do Jina Reader
-                logger.error(f"❌ Jina Reader API falhou para {url} com status {response.status_code}. Response: {response.text}")
-                return None
-
-        except Exception as e:
-            logger.error(f"❌ Erro no _extract_with_jina para {url}: {str(e)}")
-            raise e # Levanta a exceção para ser tratada no nível superior
 
     def _extract_with_trafilatura(self, url: str) -> Optional[str]:
         """Extrai usando Trafilatura"""
@@ -626,10 +606,8 @@ class AlibabaWebSailorAgent:
             return None
 
         except ImportError:
-            logger.warning("⚠️ Trafilatura não está instalada. Ignorando.")
             return None
         except Exception as e:
-            logger.error(f"❌ Erro no Trafilatura para {url}: {str(e)}")
             raise e
 
     def _extract_with_readability(self, url: str) -> Optional[str]:
@@ -640,31 +618,17 @@ class AlibabaWebSailorAgent:
 
             response = self.session.get(url, timeout=20)
             if response.status_code == 200:
-                content_bytes = response.content # Recebe como bytes
-                min_length = 300 # Define um comprimento mínimo
-
-                # Converter bytes para string se necessário
-                if isinstance(content_bytes, bytes):
-                    content_str = content_bytes.decode('utf-8', errors='ignore')
-                else:
-                    content_str = content_bytes
-
-                doc = Document(content_str)
+                doc = Document(response.content)
                 content = doc.summary()
-                if content and len(content.strip()) > min_length:
-                    logger.info(f"✅ Readability: {len(content)} caracteres de {url}")
-                    return content
-                else:
-                    logger.warning(f"⚠️ Readability: conteúdo muito curto de {url}")
-            else:
-                logger.warning(f"⚠️ Readability falhou ao obter conteúdo de {url}: Status {response.status_code}")
+
+                if content:
+                    soup = BeautifulSoup(content, 'html.parser')
+                    return soup.get_text()
             return None
 
         except ImportError:
-            logger.warning("⚠️ Readability não está instalada. Ignorando.")
             return None
         except Exception as e:
-            logger.error(f"❌ Erro no Readability para {url}: {str(e)}")
             raise e
 
     def _extract_with_beautifulsoup(self, url: str) -> Optional[str]:
@@ -682,8 +646,8 @@ class AlibabaWebSailorAgent:
 
                 # Busca conteúdo principal
                 main_content = (
-                    soup.find('main') or
-                    soup.find('article') or
+                    soup.find('main') or 
+                    soup.find('article') or 
                     soup.find('div', class_=re.compile(r'content|main|article'))
                 )
 
@@ -692,12 +656,9 @@ class AlibabaWebSailorAgent:
                 else:
                     return soup.get_text()
 
-            else:
-                logger.warning(f"⚠️ BeautifulSoup falhou ao obter conteúdo de {url}: Status {response.status_code}")
             return None
 
         except Exception as e:
-            logger.error(f"❌ Erro no BeautifulSoup para {url}: {str(e)}")
             raise e
 
     def _is_url_relevant(self, url: str, title: str, snippet: str) -> bool:
@@ -816,9 +777,9 @@ class AlibabaWebSailorAgent:
         return enhanced_query.strip()
 
     def _calculate_content_quality(
-        self,
-        content: str,
-        url: str,
+        self, 
+        content: str, 
+        url: str, 
         context: Dict[str, Any]
     ) -> float:
         """Calcula qualidade do conteúdo extraído"""
@@ -911,9 +872,9 @@ class AlibabaWebSailorAgent:
             # Verifica se contém termos relevantes
             if segmento and segmento in sentence_lower:
                 # Verifica se contém dados numéricos ou informações valiosas
-                if (re.search(r'\d+', sentence) or
+                if (re.search(r'\d+', sentence) or 
                     any(term in sentence_lower for term in [
-                        'crescimento', 'mercado', 'oportunidade', 'tendência',
+                        'crescimento', 'mercado', 'oportunidade', 'tendência', 
                         'futuro', 'inovação', 'desafio', 'consumidor', 'empresa',
                         'startup', 'investimento', 'receita', 'lucro', 'dados'
                     ])):
@@ -925,7 +886,6 @@ class AlibabaWebSailorAgent:
         """Extrai links internos relevantes"""
 
         try:
-            # Tenta primeiro com verificação SSL
             response = self.session.get(base_url, timeout=10)
             if response.status_code == 200:
                 soup = BeautifulSoup(response.content, 'html.parser')
@@ -937,55 +897,22 @@ class AlibabaWebSailorAgent:
                     full_url = urljoin(base_url, href)
 
                     # Filtra apenas links do mesmo domínio
-                    if (full_url.startswith('http') and
-                        base_domain in full_url and
-                        "#" not in full_url and
+                    if (full_url.startswith('http') and 
+                        base_domain in full_url and 
+                        "#" not in full_url and 
                         full_url != base_url and
                         not any(ext in full_url.lower() for ext in ['.pdf', '.jpg', '.png', '.gif'])):
                         links.append(full_url)
 
                 return list(set(links))[:10]
-        except requests.exceptions.SSLError as ssl_error:
-            logger.warning(f"⚠️ Erro SSL ao extrair links de {base_url}: {str(ssl_error)}")
-            # Tenta novamente sem verificação SSL como fallback
-            try:
-                temp_session = requests.Session()
-                temp_session.headers.update(self.headers)
-                temp_session.verify = False
-                import urllib3
-                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                
-                response = temp_session.get(base_url, timeout=10)
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    base_domain = urlparse(base_url).netloc
-
-                    links = []
-                    for a_tag in soup.find_all('a', href=True):
-                        href = a_tag['href']
-                        full_url = urljoin(base_url, href)
-
-                        if (full_url.startswith('http') and
-                            base_domain in full_url and
-                            "#" not in full_url and
-                            full_url != base_url and
-                            not any(ext in full_url.lower() for ext in ['.pdf', '.jpg', '.png', '.gif'])):
-                            links.append(full_url)
-
-                    logger.info(f"✅ Links extraídos sem SSL de {base_url}: {len(links)} links")
-                    return list(set(links))[:10]
-            except Exception as fallback_error:
-                logger.error(f"❌ Erro no fallback SSL para {base_url}: {str(fallback_error)}")
-                return []
-        except Exception as e:
-            logger.error(f"❌ Erro ao extrair links internos de {base_url}: {str(e)}")
+        except Exception:
             return []
 
         return []
 
     def _generate_intelligent_related_queries(
-        self,
-        original_query: str,
+        self, 
+        original_query: str, 
         context: Dict[str, Any],
         existing_content: List[Dict[str, Any]]
     ) -> List[str]:
@@ -1033,9 +960,9 @@ class AlibabaWebSailorAgent:
         return related_queries[:8]
 
     def _process_and_analyze_content(
-        self,
-        all_content: List[Dict[str, Any]],
-        query: str,
+        self, 
+        all_content: List[Dict[str, Any]], 
+        query: str, 
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Processa e analisa todo o conteúdo coletado"""
@@ -1217,7 +1144,3 @@ class AlibabaWebSailorAgent:
 
 # Instância global
 alibaba_websailor = AlibabaWebSailorAgent()
-
-def get_alibaba_websailor():
-    """Retorna a instância global do Alibaba WebSailor Agent"""
-    return alibaba_websailor

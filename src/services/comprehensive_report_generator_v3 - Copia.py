@@ -19,7 +19,6 @@ class ComprehensiveReportGeneratorV3:
 
     def __init__(self):
         """Inicializa o compilador"""
-        # Ordem atualizada dos módulos, incluindo os novos módulos de CPL
         self.modules_order = [
             'anti_objecao',
             'avatars', 
@@ -36,16 +35,9 @@ class ComprehensiveReportGeneratorV3:
             'metricas_conversao',
             'estrategia_preco',
             'canais_aquisicao',
-            'cronograma_lancamento',
-            # Novos módulos de CPL adicionados conforme instruções do CPL.txt
-            'cpl_protocol_1',
-            'cpl_protocol_2',
-            'cpl_protocol_3',
-            'cpl_protocol_4',
-            'cpl_protocol_5'
+            'cronograma_lancamento'
         ]
 
-        # Títulos atualizados, incluindo os novos módulos de CPL
         self.module_titles = {
             'anti_objecao': 'Sistema Anti-Objeção',
             'avatars': 'Avatares do Público-Alvo',
@@ -62,13 +54,7 @@ class ComprehensiveReportGeneratorV3:
             'metricas_conversao': 'Métricas de Conversão',
             'estrategia_preco': 'Estratégia de Precificação',
             'canais_aquisicao': 'Canais de Aquisição',
-            'cronograma_lancamento': 'Cronograma de Lançamento',
-            # Novos títulos de módulos de CPL adicionados conforme instruções do CPL.txt
-            'cpl_protocol_1': 'Arquitetura do Evento Magnético',
-            'cpl_protocol_2': 'CPL1 - A Oportunidade Paralisante',
-            'cpl_protocol_3': 'CPL2 - A Transformação Impossível',
-            'cpl_protocol_4': 'CPL3 - O Caminho Revolucionário',
-            'cpl_protocol_5': 'CPL4 - A Decisão Inevitável'
+            'cronograma_lancamento': 'Cronograma de Lançamento'
         }
 
         logger.info("📋 Comprehensive Report Generator ULTRA ROBUSTO inicializado")
@@ -148,7 +134,6 @@ class ComprehensiveReportGeneratorV3:
                 return available_modules
 
             for module_name in self.modules_order:
-                # Primeiro tenta carregar arquivo .md
                 module_file = modules_dir / f"{module_name}.md"
                 if module_file.exists():
                     with open(module_file, 'r', encoding='utf-8') as f:
@@ -159,20 +144,7 @@ class ComprehensiveReportGeneratorV3:
                         else:
                             logger.warning(f"⚠️ Módulo vazio: {module_name}")
                 else:
-                    # Se não encontrar .md, tenta carregar arquivo .json (para módulos CPL)
-                    module_file_json = modules_dir / f"{module_name}.json"
-                    if module_file_json.exists():
-                        try:
-                            with open(module_file_json, 'r', encoding='utf-8') as f:
-                                json_content = json.load(f)
-                                # Converte o conteúdo JSON em uma representação em texto
-                                content = json.dumps(json_content, indent=2, ensure_ascii=False)
-                                available_modules[module_name] = content
-                                logger.debug(f"✅ Módulo JSON carregado: {module_name}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Erro ao carregar módulo JSON {module_name}: {e}")
-                    else:
-                        logger.warning(f"⚠️ Módulo não encontrado: {module_name}")
+                    logger.warning(f"⚠️ Módulo não encontrado: {module_name}")
 
             logger.info(f"📊 {len(available_modules)}/{len(self.modules_order)} módulos carregados")
             return available_modules
@@ -249,20 +221,7 @@ Este relatório consolida a análise ultra-detalhada realizada pelo sistema ARQV
             if module_name in modules:
                 title = self.module_titles.get(module_name, module_name.replace('_', ' ').title())
                 report += f"## {title}\n\n"
-                
-                # Trata módulos CPL de forma especial (JSON)
-                if module_name.startswith('cpl_protocol_'):
-                    try:
-                        # Tenta parsear o conteúdo como JSON
-                        module_content = json.loads(modules[module_name])
-                        report += self._format_cpl_module_content(module_content)
-                    except json.JSONDecodeError:
-                        # Se não for JSON válido, adiciona o conteúdo como está
-                        report += modules[module_name]
-                else:
-                    # Módulos normais em Markdown
-                    report += modules[module_name]
-                
+                report += modules[module_name]
                 report += "\n\n---\n\n"
 
         # Rodapé
@@ -286,67 +245,6 @@ Este relatório consolida a análise ultra-detalhada realizada pelo sistema ARQV
 """
 
         return report
-
-    def _format_cpl_module_content(self, cpl_content: Dict[str, Any]) -> str:
-        """Formata o conteúdo de um módulo CPL para exibição no relatório"""
-        try:
-            formatted_content = ""
-            
-            # Adiciona título e descrição se disponíveis
-            if 'titulo' in cpl_content:
-                formatted_content += f"**{cpl_content['titulo']}**\n\n"
-            
-            if 'descricao' in cpl_content:
-                formatted_content += f"{cpl_content['descricao']}\n\n"
-            
-            # Adiciona fases se disponíveis
-            if 'fases' in cpl_content:
-                for fase_key, fase_data in cpl_content['fases'].items():
-                    if isinstance(fase_data, dict):
-                        # Título da fase
-                        if 'titulo' in fase_data:
-                            formatted_content += f"### {fase_data['titulo']}\n\n"
-                        
-                        # Descrição da fase
-                        if 'descricao' in fase_data:
-                            formatted_content += f"{fase_data['descricao']}\n\n"
-                        
-                        # Outros campos da fase
-                        for key, value in fase_data.items():
-                            if key not in ['titulo', 'descricao']:
-                                if isinstance(value, str):
-                                    formatted_content += f"**{key.replace('_', ' ').title()}:** {value}\n\n"
-                                elif isinstance(value, list):
-                                    formatted_content += f"**{key.replace('_', ' ').title()}:**\n"
-                                    for item in value:
-                                        if isinstance(item, str):
-                                            formatted_content += f"- {item}\n"
-                                        elif isinstance(item, dict):
-                                            formatted_content += f"- {json.dumps(item, ensure_ascii=False)}\n"
-                                    formatted_content += "\n"
-                                elif isinstance(value, dict):
-                                    formatted_content += f"**{key.replace('_', ' ').title()}:**\n"
-                                    for sub_key, sub_value in value.items():
-                                        formatted_content += f"  - {sub_key}: {sub_value}\n"
-                                    formatted_content += "\n"
-                    
-            # Adiciona considerações finais se disponíveis
-            if 'consideracoes_finais' in cpl_content:
-                formatted_content += "### Considerações Finais\n\n"
-                for key, value in cpl_content['consideracoes_finais'].items():
-                    if isinstance(value, str):
-                        formatted_content += f"**{key.replace('_', ' ').title()}:** {value}\n\n"
-                    elif isinstance(value, list):
-                        formatted_content += f"**{key.replace('_', ' ').title()}:**\n"
-                        for item in value:
-                            formatted_content += f"- {item}\n"
-                        formatted_content += "\n"
-            
-            return formatted_content
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao formatar conteúdo CPL: {e}")
-            return f"*Erro ao formatar conteúdo do módulo CPL: {str(e)}*\n\n{json.dumps(cpl_content, indent=2, ensure_ascii=False)}"
 
     def _save_final_report(self, session_id: str, report_content: str) -> str:
         """Salva relatório final"""
